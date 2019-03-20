@@ -1,4 +1,4 @@
-//latest version -- all loci are one bp
+//latest version -- all loci are one bp - effect of mutations accumulates
 // w = omega = strength selection pressure , 2.5 strong, 4 weak
 // sm = sigma normal distribution effect sizes 0.05
 // popsize 1000 per deme
