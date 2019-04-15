@@ -1,4 +1,4 @@
-//latest version -- all loci are one bp - effect of mutations accumulates
+//latest version -- all loci are one bp
 // w = omega = strength selection pressure , 2.5 strong, 4 weak
 // sm = sigma normal distribution effect sizes 0.05
 // popsize 1000 per deme
@@ -12,21 +12,18 @@ initialize() {
 	//defineConstant("sigma", 4.0);
 	//defineConstant("sigma_m", 0.05);
 	defineConstant("simID", getSeed());
-	defineConstant("burnin", 10000);
-	defineConstant("generations", 50000);
+	defineConstant("generations", 200000);
 	//defineConstant("n_loci", 100);
 	//defineConstant("migration", 0.001);
 	//defineConstant("mutation_rate", 1e-4);
+	defineConstant('burnin', 0);
 	
-	//sample n_loci random positions 
-	positions = sort(sample(10000:1999999, n_loci));
+	positions = seqLen(100)*20000+10000;
 	defineConstant("POS", positions);
 	//adapt so enough neutral sequence at ends
-	ends = c(positions[n_loci-1], 2010000);
+	ends = c(positions[n_loci-1], 2000000);
 	rates = c(mutation_rate, 0);
 	
-	//use spatial dimension to store sum of effect sizes
-	//initializeSLiMOptions(dimensionality="x");
 	//mutation rate defined for all n_loci sites, add neutral section after last mutation site 
 	initializeMutationRate(rates, ends);
 
@@ -45,37 +42,36 @@ initialize() {
 	initializeRecombinationRate(recomb);
 	//set working directory
 	//setwd("/scratch/gbisshop/slim_output");
-	//("/Users/s1854903/sims/output/DB/SGV");
-	setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/LOC/loc"+folder);
-	//initializeTreeSeq();
+	setwd("/Users/s1854903/sims/output/test");
+	//setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/LOC/denovo/loc"+folder);
+	
 }
 
 1 {
 	writeFile("DB_glob"+iter+".txt", paste(POS, sep=", "), append=F);
 	writeFile("DB_glob"+iter+".txt", "n_loci, selection_sd, mut_sd, migration, mutation_rate, burnin, simID", append=T);
 	writeFile("DB_glob"+iter+".txt", paste(c(n_loci, sigma, sigma_m, migration, mutation_rate, burnin, simID), sep=", "), append=T);
-	writeFile("DB_glob"+iter+".txt", "time, sum_divergence, difference_pop_means, p1, p2", append=T);
+	writeFile("DB_glob"+iter+".txt", "time, mean_div, sum_loc_divergence, ", append=T);
 	//size in each deme 1000
 	sim.addSubpop("p1", 1000);
 	sim.addSubpop("p2", 1000);
 	p1.setMigrationRates(p2, migration);
 	p2.setMigrationRates(p1, migration);
-	gens = seq(burnin,generations+1, by=500);
+	gens = seq(1,generations+1, by=500);
 	for (gen in gens)
 		sim.registerLateEvent(NULL, s1.source, gen, gen);
 	sim.deregisterScriptBlock(s1);
 }
-tags
-	//test = float(n_loci);
-	//p1alleles = float(n_loci);
-	//p2alleles = float(n_loci);
+
+s1 1 late() {
+	
 	p1av = float(n_loci);
 	p2av = float(n_loci);
 	p1muts = p1.individuals.genomes.mutationsOfType(m1);
 	p2muts = p2.individuals.genomes.mutationsOfType(m1);
 	
 	for (pos in seqLen(n_loci)){
-		//determine leading allele (based on frequency) and its effect size
+	
 		//determine average effect size, weighted by frequency
 		//for p1
 		//mutations at position pos - convert from 1 to 100
@@ -88,13 +84,19 @@ tags
 		p2av[pos] = sum(p2pos.selectionCoeff)/p2.individualCount;	
 				}
 					
-	//local_result = (p1alleles-p2alleles);
-	//result = sum(local_result);
 	loc_av_result = p1av-p2av;
 	av_result = sum(loc_av_result);
-	writeFile("DB_glob"+iter+".txt", sim.generation +", "+av_result, append=T);
+	div = mean(p1.individuals.tagF) - mean(p2.individuals.tagF);
+
+	writeFile("DB_glob"+iter+".txt", sim.generation +", "+div+", "+av_result, append=T);
 	writeFile("DB_loc"+iter+".txt", sim.generation +", "+paste(loc_av_result, sep=", "), append=T);
-	//sim.treeSeqRememberIndividuals(sim.subpopulations.individuals);
+
+	if (all(p1.individuals.countOfMutationsOfType(m1)>0)){
+		mut_or = mean(sapply(p1.individuals, 'if (applyValue.countOfMutationsOfType(m1)!=0) length(applyValue.uniqueMutationsOfType(m1)[applyValue.uniqueMutationsOfType(m1).subpopID==1])/length(applyValue.uniqueMutationsOfType(m1));'));
+	
+		writeFile('mutratio_owndeme'+iter+'.txt', sim.generation+', '+mut_or, append=T);
+		//writeFile('mutratio_owndeme'+iter+'.txt', sim.generation+', '+paste(mut_or, sep=', '), append=T);
+		}
 	}
 
 1: late(){
@@ -108,25 +110,13 @@ fitness(m1){
 		}
 
 //calculate fitness based on sum of effect size of all loci
-//first 10000 generations to generate SGV
-//optimum is 0.0 for both demes
-
-1:10000 fitness(NULL, p1){
-	return 1 + exp(-((individual.tagF)^2)/(2*sigma^2));
-		}
-1:10000 fitness(NULL, p2){
-	return 1 + exp(-((individual.tagF)^2)/(2*sigma^2));
-		}
-
-
-//calculate fitness based on sum of effect size of all loci
 //selection to different optima (2.0 and -2.0)
 
-10001:30001 fitness(NULL, p1){
+1:200001 fitness(NULL, p1){
 	return 1 + exp(-((individual.tagF - optimum1)^2)/(2*sigma^2));
 		}
-10001:30001 fitness(NULL, p2){
+1:200001 fitness(NULL, p2){
 	return 1 + exp(-((individual.tagF - optimum2)^2)/(2*sigma^2));
 		}
 	
-30001 late() {sim.simulationFinished(); }
+200001 late() {sim.simulationFinished(); }

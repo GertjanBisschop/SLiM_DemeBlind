@@ -1,0 +1,195 @@
+//latest version -- all loci are one bp
+// w = omega = strength selection pressure , 2.5 strong, 4 weak
+// sm = sigma normal distribution effect sizes 0.05
+// popsize 1000 per deme
+// number of loci 100
+// migrationrate 0.1
+
+initialize() {
+	defineConstant("optimum1", 2);
+	defineConstant("optimum2", -2);
+	defineConstant('glob_opt', 2);
+	//standard deviation normal distribution
+	//defineConstant("sigma", 4.0);
+	//defineConstant("sigma_m", 0.05);
+	defineConstant("simID", getSeed());
+	defineConstant("generations", 200000);
+	//defineConstant("n_loci", 100);
+	//defineConstant("migration", 0.001);
+	//defineConstant("mutation_rate", 1e-4);
+	
+	//positions of loci under local selection 
+	positions = seqLen(100)*20000+10000;
+	//code for sampling n_loci randomly
+	//positions = sort(sample(10000:2000000, n_loci));
+	defineConstant("POS", positions);
+	//adapt so enough neutral sequence at ends
+	ends = c(positions[n_loci-1], 2000000);
+	rates = c(mutation_rate, 0);
+	
+	//mutation rate defined for all n_loci sites, add neutral section after last mutation site 
+	initializeMutationRate(rates, ends);
+
+	// m1 mutation -- codes for QTL effect size zero upon initialization
+	initializeMutationType("m1", 0.5, "f", 0.0);
+	
+	//make sure slim includes fixed mutations to calculate fitness
+	m1.convertToSubstitution = F;
+	
+	//multiple mutations on one locus, stack effect sizes s, only remember last l
+	m1.mutationStackPolicy = "s";
+	
+	// g1 genomic element type: uses m1 for all mutations
+	initializeGenomicElementType("g1", m1, 1.0);
+	
+	for (element in positions)
+		initializeGenomicElement(g1, element, element);
+	
+	//initialize recombinationrate
+	initializeRecombinationRate(recomb);
+
+	//set working directory
+	//setwd("/scratch/gbisshop/slim_output");
+	//setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/FGM/basic/loc"+folder);
+	//setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/FGM/globcompl/loc"+folder);
+	//setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/FGM/denovo/loc"+folder);
+
+	// QTL-related constants used below
+	defineConstant("QTL_mean", c(0, 0));
+	defineConstant("QTL_cov", 0.0); //no mutational correlations
+	defineConstant("QTL_sigma", matrix(c(sigma_m,QTL_cov,QTL_cov,sigma_m), nrow=2));
+
+}
+
+1 {
+	writeFile("DB_glob"+iter+".txt", paste(POS, sep=", "), append=F);
+	writeFile("DB_glob"+iter+".txt",'generation, loc_divergence, mean_loc_div, glob_p1, glob_p2', append=T);
+	//size in each deme 1000
+	sim.addSubpop("p1", 1000);
+	sim.addSubpop("p2", 1000);
+	p1.setMigrationRates(p2, migration);
+	p2.setMigrationRates(p1, migration);
+	gens = seq(1,generations+1, by=500);
+	for (gen in gens)
+		sim.registerLateEvent(NULL, s1.source, gen, gen);
+		sim.deregisterScriptBlock(s1);
+	
+}
+s1 1 late() {
+	//phenotype0 is the phenotype under global selection
+	//phenotype 1 is the phenotype under local selection
+	p1_0 = mean(p1.individuals.getValue('phenotype0'));
+	p1_1 = mean(p1.individuals.getValue('phenotype1'));
+	p2_0 = mean(p2.individuals.getValue('phenotype0'));
+	p2_1 = mean(p2.individuals.getValue('phenotype1'));
+
+	loc_div = p1_1 - p2_1;
+	
+	//local divergence
+	p1av = float(n_loci);
+	p2av = float(n_loci);
+	p1muts = p1.individuals.genomes.mutationsOfType(m1);
+	p2muts = p2.individuals.genomes.mutationsOfType(m1);
+	
+	for (pos in seqLen(n_loci)){
+		//determine leading allele (based on frequency) and its effect size
+		//determine average effect size, weighted by frequency
+		//for p1
+		//mutations at position pos - convert from 1 to 100
+		
+		p1pos = p1muts[p1muts.position==POS[pos]];
+		if (length(p1pos)>0)
+			p1coeff = p1pos.getValue('e1');
+		else p1coeff = c(0.0);
+		p1av[pos] = sum(p1coeff)/p1.individualCount;
+		p2pos = p2muts[p2muts.position==POS[pos]];
+		if (length(p2pos)>0)
+			p2coeff = p2pos.getValue('e1');
+		else p2coeff = c(0.0);
+		p2av[pos] = sum(p2coeff)/p2.individualCount;	
+				}
+					
+	loc_av_result = p1av-p2av;
+	writeFile("DB_loc"+iter+".txt", sim.generation +", "+paste(loc_av_result, sep=", "), append=T);
+
+	//write away mean fitness
+	writeFile("DB_glob"+iter+".txt", sim.generation +", "+loc_div+", "+sum(loc_av_result)+", "+p1_0+", "+p2_0, append=T);
+
+	if (all(p1.individuals.countOfMutationsOfType(m1)>0)){
+		mut_or = mean(sapply(p1.individuals, 'if (applyValue.countOfMutationsOfType(m1)!=0) length(applyValue.uniqueMutationsOfType(m1)[applyValue.uniqueMutationsOfType(m1).subpopID==1])/length(applyValue.uniqueMutationsOfType(m1));'));
+	
+		writeFile('mutratio_owndeme'+iter+'.txt', sim.generation+', '+mut_or, append=T);
+		//writeFile('mutratio_owndeme'+iter+'.txt', sim.generation+', '+paste(mut_or, sep=', '), append=T);
+		}
+	
+	}
+
+late() {
+	sim.setValue('epsilon', abs(rnorm(2,mean=0.0, sd=0.01)));
+
+	// add effect sizes into new mutation objects
+	all_m1 = sim.mutationsOfType(m1);
+	new_m1 = all_m1[all_m1.originGeneration == sim.generation];
+	
+	if (size(new_m1))
+	{
+		// draw mutational effects for all new mutations at once
+		effects = rmvnorm(size(new_m1), QTL_mean, QTL_sigma);
+		
+		// remember all drawn effects, for our final output
+		old_effects = sim.getValue("all_effects");
+		sim.setValue("all_effects", rbind(old_effects, effects));
+		
+		for (i in seqAlong(new_m1))
+		{
+			e = effects[i,];	// each draw is one row in effects
+			mut = new_m1[i];
+			mut.setValue("e0", e[0]);
+			mut.setValue("e1", e[1]);
+		}
+	}
+}
+
+late() {
+	// construct phenotypes from additive effects of QTL mutations
+	inds = sim.subpopulations.individuals;
+	
+	for (ind in inds)
+	{
+		muts = ind.genomes.mutationsOfType(m1);
+		
+		// we have to special-case when muts is empty
+		//phenotype0 is phenotype under global selection
+		//phenotype1 is the phenotype under local selection
+		if (size(muts)) {
+			ind.setValue("phenotype0", sum(muts.getValue("e0")));
+			ind.setValue("phenotype1", sum(muts.getValue("e1")));
+		} else {
+			ind.setValue("phenotype0", 0.0);
+			ind.setValue("phenotype1", 0.0);
+		}
+	}
+}
+
+
+//make QTLs intrinsically neutral
+fitness(m1){
+	return 1.0;
+		}
+fitness(m2){
+	return 1.0;
+		}
+
+//calculate fitness based on sum of effect size of all loci
+//selection to different optima (2.0 and -2.0)
+
+1:200001 fitness(NULL, p1){
+	d = sqrt((individual.getValue('phenotype0') - glob_opt)^2+(individual.getValue('phenotype1') - optimum1)^2);
+	return 1 + exp(-(d^2)/(2*sigma^2));
+		}
+1:200001 fitness(NULL, p2){
+	d = sqrt((individual.getValue('phenotype0') - glob_opt)^2+(individual.getValue('phenotype1') - optimum2)^2);
+	return 1 + exp(-(d^2)/(2*sigma^2));
+		}
+	
+200001 late() {sim.simulationFinished();}
