@@ -19,13 +19,10 @@ initialize() {
 	//defineConstant("migration", 0.001);
 	//defineConstant("mutation_rate", 1e-4);
 	
-	//sample n_loci random positions 
-	positions = seqLen(100)*20000+10000;
-	//code for sampling n_loci randomly
-	//positions = sort(sample(10000:2000000, n_loci));
+	positions = asInteger(seqLen(100)*seq_len/n_loci+seq_len/n_loci);
 	defineConstant("POS", positions);
 	//adapt so enough neutral sequence at ends
-	ends = c(positions[n_loci-1], 2000000);
+	ends = c(positions[n_loci-1], asInteger(seq_len+seq_len/n_loci));
 	rates = c(mutation_rate, 0);
 	
 	
@@ -174,10 +171,6 @@ late() {
 }
 
 
-//make QTLs intrinsically neutral
-fitness(m1){
-	return 1.0;
-		}
 
 //calculate fitness based on sum of effect size of all loci
 //first 10000 generations to generate SGV

@@ -20,20 +20,24 @@ initialize() {
 	//defineConstant("migration", 0.001);
 	//defineConstant("mutation_rate", 1e-4);
 	
-	positions = seqLen(100)*20000+10000;
+	positions = asInteger(seqLen(100)*seq_len/n_loci+seq_len/n_loci);
 	defineConstant("POS", positions);
+	//adapt so enough neutral sequence at ends
+	ends = c(positions[n_loci-1], asInteger(seq_len+seq_len/n_loci));
 
-	//selecting positions for globally beneficial mutations 
-	glob_positions = sort(sample(10000:2000000, g_loci));
+	glob_positions = sort(sample(setDifference((positions[0]:positions[n_loci-1]), positions), g_loci))
+	
+	/* selecting positions for globally beneficial mutations
+	old procedure for very long sequence 
+	glob_positions = sort(sample(positions[0]:positions[n_loci-1], g_loci));
 	//make sure they don't overlap (method using setDifference was hugely slow)
 	temp = setIntersection(positions, glob_positions);
 	while (length(temp)!=0) {
 	new = sample(10000:2000000, length(temp));
 	for (index in seqLen(length(temp))) glob_positions[which(glob_positions==temp[index])] = new[index]; 
 	temp = setIntersection(positions, glob_positions);}
+	*/
 
-	//adapt so enough neutral sequence at ends
-	ends = c(positions[n_loci-1], 2000000);
 	rates = c(mutation_rate, 0);
 	
 	//use spatial dimension to store sum of effect sizes
@@ -88,7 +92,9 @@ initialize() {
 	for (gen in gens)
 		sim.registerLateEvent(NULL, s1.source, gen, gen);
 	sim.deregisterScriptBlock(s1);
-	sim.setValue('glob_mean_t2', 2.0);
+	sim.setValue('glob_t2', 2.0);
+	sim.setValue('glob_t1', 0.0);
+
 }
 
 s1 1 late() {
@@ -134,10 +140,16 @@ s1 1 late() {
 	inds = sim.subpopulations.individuals;
 	inds.x = inds.sumOfMutationsOfType(m1);
 	inds.y = inds.sumOfMutationsOfType(m2);
+	
 	//updating glob_mean recursively to keep track of mean phenotype in population, so strength of directional
 	//selection remains the same throughout the simulation process.
-	sim.setValue('glob_mean_t1', sim.getValue('glob_mean_t2'));
-	sim.setValue('glob_mean_t2', sim.getValue('glob_mean_t2') + mean(inds.y));
+	if (mean(inds.x) - sim.getValue('glob_t1') > 0){
+	//new level of glob_t1 determined by level of adaptation in pop
+	sim.setValue('glob_t2', sim.getValue('glob_t2')+ glob_adap - sim.getValue('glob_t1'));
+	sim.setValue('glob_t1', glob_adap);
+		
+	}
+
 		}
 
 //make QTLs intrinsically neutral
@@ -156,11 +168,11 @@ fitness(m2){
 //selection to different optima (2.0 and -2.0)
 
 1:200001 fitness(NULL, p1){
-	d = sqrt((individual.y - sim.getValue('glob_mean_t1'))^2+(individual.x - optimum1)^2);
+	d = sqrt((individual.y - sim.getValue('glob_t1'))^2+(individual.x - optimum1)^2);
 	return 1 + exp(-(d^2)/(2*sigma^2));
 		}
 1:200001 fitness(NULL, p2){
-	d = sqrt((individual.y - sim.getValue('glob_mean_t1'))^2+(individual.x - optimum2)^2);
+	d = sqrt((individual.y - sim.getValue('glob_t1'))^2+(individual.x - optimum2)^2);
 	return 1 + exp(-(d^2)/(2*sigma^2));
 		}
 	

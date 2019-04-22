@@ -18,10 +18,10 @@ initialize() {
 	//defineConstant("migration", 0.001);
 	//defineConstant("mutation_rate", 1e-4);
 	
-	positions = seqLen(100)*20000+10000;
+	positions = asInteger(seqLen(100)*seq_len/n_loci+seq_len/n_loci);
 	defineConstant("POS", positions);
 	//adapt so enough neutral sequence at ends
-	ends = c(positions[n_loci-1], 2000000);
+	ends = c(positions[n_loci-1], asInteger(seq_len+seq_len/n_loci));
 	rates = c(mutation_rate, 0);
 	
 	//mutation rate defined for all n_loci sites, add neutral section after last mutation site 
@@ -42,8 +42,8 @@ initialize() {
 	initializeRecombinationRate(recomb);
 	//set working directory
 	//setwd("/scratch/gbisshop/slim_output");
-	setwd("/Users/s1854903/sims/output/test");
-	//setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/LOC/SGVbasic/loc"+folder);
+	//setwd("/Users/s1854903/sims/output/test");
+	setwd("/exports/csce/eddie/biology/groups/lohselab/sims/output/LOC/SGVbasic/loc"+folder);
 }
 
 1 {
@@ -133,4 +133,4 @@ fitness(m1){
 	return 1 + exp(-((individual.tagF - optimum2)^2)/(2*sigma^2));
 		}
  	
-210001 late() {sim.simulationFinished(); }
+110001 late() {sim.simulationFinished(); }
