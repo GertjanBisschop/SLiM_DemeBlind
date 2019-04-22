@@ -176,9 +176,6 @@ late() {
 fitness(m1){
 	return 1.0;
 		}
-fitness(m2){
-	return 1.0;
-		}
 
 //calculate fitness based on sum of effect size of all loci
 //selection to different optima (2.0 and -2.0)

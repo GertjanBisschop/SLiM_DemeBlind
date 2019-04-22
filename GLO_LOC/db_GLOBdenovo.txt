@@ -144,6 +144,9 @@ s1 1 late() {
 fitness(m1){
 	return 1.0;
 		}
+fitness(m2){
+	return 1.0;
+		}
 
 //calculate fitness based on sum of effect size of all loci
 //first 10000 generations to generate SGV
